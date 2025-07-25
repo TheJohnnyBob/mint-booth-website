@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
-  trailingSlash: true,
+  // Remove static export for Vercel - use dynamic features
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -9,25 +8,10 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    unoptimized: true
+    // Vercel handles image optimization automatically
+    domains: ['imagedelivery.net'], // Allow Cloudflare Images
+    formats: ['image/webp', 'image/avif'],
   },
-  // Optimize bundle size
-  experimental: {
-    optimizeCss: true,
-  },
-  // Reduce bundle size by excluding dev dependencies
-  webpack: (config, { dev, isServer }) => {
-    if (!dev && !isServer) {
-      // Reduce bundle size in production
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        '@': require('path').resolve(__dirname),
-      }
-    }
-    return config
-  },
-  // Exclude cache and other large files from static export
-  distDir: '.next',
 }
 
 export default nextConfig
