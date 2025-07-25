@@ -37,10 +37,17 @@ export interface Booking {
   status: string
   special_requests?: string
   created_at: string
+  updated_at: string
 }
 
 // Initialize Neon connection
-const sql = neon(process.env.DATABASE_URL!)
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is not set")
+}
+
+const sql = neon(process.env.DATABASE_URL)
+
+export { sql }
 
 // Validate database connection and check existing schema
 export async function validateConnection() {
@@ -122,7 +129,20 @@ export async function initializeDatabase() {
         status VARCHAR(50) DEFAULT 'pending',
         special_requests TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (package_id) REFERENCES packages (id)
+      )
+    `
+
+    // Create availability table
+    await sql`
+      CREATE TABLE IF NOT EXISTS availability (
+        id SERIAL PRIMARY KEY,
+        date DATE NOT NULL,
+        time_slot TIME NOT NULL,
+        is_available BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(date, time_slot)
       )
     `
 
@@ -134,10 +154,10 @@ export async function initializeDatabase() {
     }
 
     console.log("Database initialized successfully")
-    return { success: true }
+    return { success: true, message: "Database initialized successfully" }
   } catch (error) {
     console.error("Database initialization error:", error)
-    throw error
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
 
@@ -213,7 +233,7 @@ export async function getAddOns(): Promise<AddOn[]> {
 }
 
 // Create a new booking
-export async function createBooking(bookingData: Omit<Booking, "id" | "created_at">): Promise<string> {
+export async function createBooking(bookingData: Omit<Booking, "id" | "created_at" | "updated_at">): Promise<string> {
   try {
     await sql`
       INSERT INTO bookings (
@@ -243,8 +263,8 @@ export async function createBooking(bookingData: Omit<Booking, "id" | "created_a
 export async function checkAvailability(date: string, time: string): Promise<boolean> {
   try {
     const rows = await sql`
-      SELECT COUNT(*) as count FROM bookings 
-      WHERE event_date = ${date} AND event_time = ${time} AND status != 'cancelled'
+      SELECT COUNT(*) as count FROM availability 
+      WHERE date = ${date} AND time_slot = ${time} AND is_available = true
     `
 
     return rows[0].count === 0
@@ -441,4 +461,15 @@ function getMockAddons(): AddOn[] {
       available_packages: [1, 2, 3],
     },
   ]
+}
+
+// Test database connection
+export async function testConnection() {
+  try {
+    const result = await sql`SELECT 1 as test`
+    return { success: true, result }
+  } catch (error) {
+    console.error("Database connection failed:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+  }
 }

@@ -1,958 +1,448 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { CheckCircle, Clock } from "lucide-react"
-import { CardContent } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { CalendarIcon, Clock, MapPin, Package, User, Mail, Phone } from "lucide-react"
+import { format } from "date-fns"
+import { cn } from "@/lib/utils"
 
-interface Package {
-  id: number
+const packages = [
+  {
+    id: "basic",
+    name: "Basic Package",
+    duration: 2,
+    price: 299,
+    features: ["2 hours of service", "Basic props", "Digital gallery"],
+  },
+  {
+    id: "premium",
+    name: "Premium Package",
+    duration: 4,
+    price: 499,
+    features: ["4 hours of service", "Premium props", "Digital gallery", "Custom backdrop"],
+  },
+  {
+    id: "deluxe",
+    name: "Deluxe Package",
+    duration: 6,
+    price: 699,
+    features: ["6 hours of service", "All props included", "Digital gallery", "Custom backdrop", "On-site attendant"],
+  },
+]
+
+const timeSlots = [
+  "09:00",
+  "10:00",
+  "11:00",
+  "12:00",
+  "13:00",
+  "14:00",
+  "15:00",
+  "16:00",
+  "17:00",
+  "18:00",
+  "19:00",
+  "20:00",
+  "21:00",
+]
+
+interface BookingFormData {
   name: string
-  price: number
-  duration_hours: number
-  description: string
-  features: string[]
-}
-
-interface AddOn {
-  id: number
-  name: string
-  price: number
-  description: string
-  category: string
-  is_hourly: boolean
-  available_packages: number[]
-}
-
-interface BookingData {
-  customerName: string
-  customerEmail: string
-  customerPhone: string
-  eventDate: string
+  email: string
+  phone: string
+  eventDate: Date | undefined
   eventTime: string
-  eventType: string
-  guestCount: string
-  venueAddress: string
-  packageId: number
-  selectedAddons: number[]
+  packageType: string
+  location: string
   specialRequests: string
 }
 
 export default function CustomBookingSystem() {
   const [currentStep, setCurrentStep] = useState(1)
-  const [selectedPackage, setSelectedPackage] = useState<Package | null>(null)
-  const [packages, setPackages] = useState<Package[]>([])
-  const [addOns, setAddOns] = useState<AddOn[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true)
-        const response = await fetch("/api/bookings")
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch data")
-        }
-
-        const data = await response.json()
-        setPackages(data.packages || [])
-        setAddOns(data.addons || [])
-      } catch (err) {
-        console.error("Error fetching data:", err)
-        setError("Failed to load booking data. Please refresh the page.")
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [])
-
-  const [bookingData, setBookingData] = useState<BookingData>({
-    customerName: "",
-    customerEmail: "",
-    customerPhone: "",
-    eventDate: "",
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [availableSlots, setAvailableSlots] = useState<string[]>(timeSlots)
+  const [formData, setFormData] = useState<BookingFormData>({
+    name: "",
+    email: "",
+    phone: "",
+    eventDate: undefined,
     eventTime: "",
-    eventType: "",
-    guestCount: "",
-    venueAddress: "",
-    packageId: 0,
-    selectedAddons: [],
+    packageType: "",
+    location: "",
     specialRequests: "",
   })
 
-  const [selectedAddons, setSelectedAddons] = useState<number[]>([])
-  const [addonQuantities, setAddonQuantities] = useState<Record<number, number>>({})
-  const [lastSelectedQuantities, setLastSelectedQuantities] = useState<Record<number, number>>({})
+  const selectedPackage = packages.find((pkg) => pkg.id === formData.packageType)
+  const totalPrice = selectedPackage?.price || 0
 
-  const getAdditionalHours = (quantities: Record<number, number>): number => {
-    return quantities[9] || 0
-  }
+  const checkAvailability = async (date: Date) => {
+    try {
+      const dateStr = format(date, "yyyy-MM-dd")
+      const response = await fetch(`/api/availability?date=${dateStr}`)
+      const data = await response.json()
 
-  const getTotalHours = (packageId: number, additionalHours: number): number => {
-    const baseHours = selectedPackage?.duration_hours || 0
-    return baseHours + additionalHours
-  }
-
-  const getMaxAllowedHours = (addonId: number, totalHours: number): number => {
-    if (addonId === 1) {
-      return totalHours
+      if (data.success) {
+        setAvailableSlots(data.availableSlots)
+      }
+    } catch (error) {
+      console.error("Failed to check availability:", error)
     }
-    if (addonId === 6) {
-      return 2
+  }
+
+  const handleDateSelect = (date: Date | undefined) => {
+    setFormData((prev) => ({ ...prev, eventDate: date, eventTime: "" }))
+    if (date) {
+      checkAvailability(date)
     }
-    return 10
-  }
-
-  const validateAddonHours = (quantities: Record<number, number>, totalHours: number): number[] => {
-    const violations: number[] = []
-
-    Object.entries(quantities).forEach(([addonIdStr, quantity]) => {
-      const addonId = Number.parseInt(addonIdStr)
-      const addon = addOns.find((a) => a.id === addonId)
-
-      if (addon?.is_hourly && addonId !== 9) {
-        const maxAllowed = getMaxAllowedHours(addonId, totalHours)
-        if (quantity > maxAllowed) {
-          violations.push(addonId)
-        }
-      }
-    })
-
-    return violations
-  }
-
-  const hasValidationErrors = (quantities: Record<number, number>, packageId: number): boolean => {
-    const additionalHours = getAdditionalHours(quantities)
-    const totalHours = getTotalHours(packageId, additionalHours)
-    const violations = validateAddonHours(quantities, totalHours)
-    return violations.length > 0
-  }
-
-  const generateTimeSlots = (): string[] => {
-    const slots = []
-    for (let hour = 9; hour <= 22; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        const time24 = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
-        const time12 = formatTimeTo12Hour(time24)
-        slots.push(time12)
-      }
-    }
-    return slots
-  }
-
-  const formatTimeTo12Hour = (time24: string): string => {
-    if (!time24) return ""
-
-    const [hours, minutes] = time24.split(":")
-    const hour24 = Number.parseInt(hours)
-    const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24
-    const ampm = hour24 >= 12 ? "PM" : "AM"
-
-    return `${hour12}:${minutes} ${ampm}`
-  }
-
-  const convertTo24Hour = (time12: string): string => {
-    if (!time12) return ""
-
-    const [time, ampm] = time12.split(" ")
-    const [hours, minutes] = time.split(":")
-    let hour24 = Number.parseInt(hours)
-
-    if (ampm === "PM" && hour24 !== 12) {
-      hour24 += 12
-    } else if (ampm === "AM" && hour24 === 12) {
-      hour24 = 0
-    }
-
-    return `${hour24.toString().padStart(2, "0")}:${minutes}`
-  }
-
-  const calculateTotal = () => {
-    const packagePrice = selectedPackage?.price || 0
-    const addonsPrice = selectedAddons.reduce((total, addonId) => {
-      const addon = addOns.find((a) => a.id === addonId)
-      if (!addon) return total
-
-      const quantity = addonQuantities[addonId] || 1
-      return total + addon.price * quantity
-    }, 0)
-    return packagePrice + addonsPrice
-  }
-
-  const toggleAddon = (addonId: number) => {
-    const addon = addOns.find((a) => a.id === addonId)
-    if (!addon) return
-
-    setSelectedAddons((prev) => {
-      if (prev.includes(addonId)) {
-        setLastSelectedQuantities((prevLast) => ({
-          ...prevLast,
-          [addonId]: addonQuantities[addonId] || 1,
-        }))
-
-        setAddonQuantities((prevQty) => {
-          const newQty = { ...prevQty }
-          delete newQty[addonId]
-          return newQty
-        })
-
-        return prev.filter((id) => id !== addonId)
-      } else {
-        const lastQuantity = lastSelectedQuantities[addonId] || 1
-        setAddonQuantities((prevQty) => ({
-          ...prevQty,
-          [addonId]: lastQuantity,
-        }))
-
-        return [...prev, addonId]
-      }
-    })
-  }
-
-  const updateAddonQuantity = (addonId: number, change: number) => {
-    setAddonQuantities((prev) => {
-      const currentQty = prev[addonId] || 1
-      let newQty = Math.max(1, currentQty + change)
-
-      if (addonId === 9) {
-        return {
-          ...prev,
-          [addonId]: newQty,
-        }
-      }
-
-      const additionalHours = getAdditionalHours(prev)
-      const totalHours = getTotalHours(selectedPackage?.id || 0, additionalHours)
-      const maxAllowed = getMaxAllowedHours(addonId, totalHours)
-
-      newQty = Math.min(newQty, maxAllowed)
-
-      return {
-        ...prev,
-        [addonId]: newQty,
-      }
-    })
-  }
-
-  const getAvailableAddons = () => {
-    if (!selectedPackage) return []
-    return addOns.filter((addon) => addon.available_packages.includes(selectedPackage.id))
   }
 
   const handleSubmit = async () => {
-    if (!selectedPackage) return
+    if (!formData.eventDate) return
 
-    const finalBookingData = {
-      ...bookingData,
-      packageId: selectedPackage.id,
-      selectedAddons: selectedAddons,
-      addonQuantities: addonQuantities,
-    }
-
+    setIsSubmitting(true)
     try {
       const response = await fetch("/api/bookings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(finalBookingData),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          eventDate: format(formData.eventDate, "yyyy-MM-dd"),
+          eventTime: formData.eventTime,
+          duration: selectedPackage?.duration || 2,
+          packageType: formData.packageType,
+          location: formData.location,
+          specialRequests: formData.specialRequests,
+          totalPrice,
+        }),
       })
 
-      if (response.ok) {
-        const result = await response.json()
-        setCurrentStep(5)
+      const data = await response.json()
+
+      if (data.success) {
+        setCurrentStep(4) // Success step
       } else {
-        console.error("Booking failed")
+        alert(`Booking failed: ${data.error}`)
       }
     } catch (error) {
-      console.error("Error submitting booking:", error)
+      console.error("Booking submission failed:", error)
+      alert("Failed to submit booking. Please try again.")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="max-w-4xl mx-auto">
-        <div className="glass-card glass-highlight p-8 rounded-3xl">
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0ABAB5] mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading booking system...</p>
-          </div>
-        </div>
-      </div>
-    )
+  const nextStep = () => {
+    if (currentStep < 3) {
+      setCurrentStep(currentStep + 1)
+    } else {
+      handleSubmit()
+    }
   }
 
-  if (error) {
-    return (
-      <div className="max-w-4xl mx-auto">
-        <div className="glass-card glass-highlight p-8 rounded-3xl">
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-red-600 text-2xl">⚠️</span>
-            </div>
-            <h3 className="text-xl font-bold text-red-600 mb-2">Error Loading Booking System</h3>
-            <p className="text-gray-600 mb-4">{error}</p>
-            <button onClick={() => window.location.reload()} className="btn-mint px-6 py-2 rounded-lg text-white">
-              Retry
-            </button>
-          </div>
-        </div>
-      </div>
-    )
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1)
+    }
+  }
+
+  const canProceed = () => {
+    switch (currentStep) {
+      case 1:
+        return formData.packageType && formData.eventDate && formData.eventTime
+      case 2:
+        return formData.location.trim() !== ""
+      case 3:
+        return formData.name.trim() !== "" && formData.email.trim() !== "" && formData.phone.trim() !== ""
+      default:
+        return false
+    }
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-8">
-        <div className="flex justify-center items-center gap-4">
-          {[1, 2, 3, 4].map((step) => (
-            <div key={step} className="flex items-center">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  currentStep >= step ? "btn-mint text-white" : "bg-gray-200 text-gray-600"
-                }`}
-              >
-                {step}
-              </div>
-              {step < 4 && <div className={`w-12 h-0.5 mx-2 ${currentStep > step ? "bg-[#0ABAB5]" : "bg-gray-200"}`} />}
-            </div>
-          ))}
-        </div>
-        <div className="text-center mt-4 text-sm text-gray-600">
-          {currentStep === 1 && "Choose Your Package"}
-          {currentStep === 2 && "Select Add-Ons"}
-          {currentStep === 3 && "Pick Date & Time"}
-          {currentStep === 4 && "Your Information"}
-          {currentStep === 5 && "Booking Confirmed!"}
-        </div>
-      </div>
-
-      <div className="glass-card glass-highlight p-8 rounded-3xl">
-        {currentStep === 1 && (
-          <div>
-            <h3 className="text-2xl font-bold text-center mb-8">Choose Your Package</h3>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {packages.map((pkg) => (
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 py-12 px-4">
+      <div className="max-w-2xl mx-auto">
+        {/* Progress Steps */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            {[1, 2, 3].map((step) => (
+              <div key={step} className="flex items-center">
                 <div
-                  key={pkg.id}
-                  className={`cursor-pointer transition-all duration-300 ${
-                    selectedPackage?.id === pkg.id
-                      ? "glass-card-mint glass-highlight-mint scale-105 shadow-2xl"
-                      : "glass-card glass-highlight hover:scale-105"
-                  }`}
-                  onClick={() => setSelectedPackage(pkg)}
+                  className={cn(
+                    "w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors",
+                    currentStep >= step ? "bg-emerald-600 text-white" : "bg-gray-200 text-gray-600",
+                  )}
                 >
-                  <CardContent className="p-6">
-                    <h4 className="text-xl font-bold text-center">{pkg.name}</h4>
-                    <p className="text-3xl font-bold text-center mt-4" style={{ color: "#0ABAB5" }}>
-                      ${pkg.price}
-                    </p>
-                    <p className="text-gray-500 text-center mt-2">{pkg.description}</p>
-                    <ul className="mt-6 space-y-3">
-                      {pkg.features.map((feature, i) => (
-                        <li key={i} className="flex items-start gap-3">
-                          <CheckCircle className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: "#0ABAB5" }} />
-                          <span className="text-sm text-gray-600">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
+                  {step}
                 </div>
-              ))}
-            </div>
-            <div className="text-center mt-8">
-              <Button
-                onClick={() => setCurrentStep(2)}
-                disabled={!selectedPackage}
-                size="lg"
-                className="btn-mint rounded-xl h-12 px-8"
-              >
-                Continue to Add-Ons
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {currentStep === 2 && (
-          <div>
-            <h3 className="text-2xl font-bold text-center mb-2">Enhance Your Experience</h3>
-            <p className="text-center text-gray-600 mb-8">Select any add-ons to customize your package</p>
-            <div className="grid grid-cols-1 gap-4 mb-8">
-              {getAvailableAddons().map((addon) => {
-                const additionalHours = getAdditionalHours(addonQuantities)
-                const totalHours = getTotalHours(selectedPackage?.id || 0, additionalHours)
-                const violations = validateAddonHours(addonQuantities, totalHours)
-                const hasViolation = violations.includes(addon.id)
-                const currentQuantity = addonQuantities[addon.id] || 1
-                const maxAllowed = getMaxAllowedHours(addon.id, totalHours)
-
-                return (
+                {step < 3 && (
                   <div
-                    key={addon.id}
-                    className={`p-4 rounded-xl border-2 transition-all ${
-                      selectedAddons.includes(addon.id)
-                        ? hasViolation
-                          ? "border-red-500 bg-red-50"
-                          : "border-[#0ABAB5] bg-[#0ABAB5]/10"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center cursor-pointer ${
-                              selectedAddons.includes(addon.id)
-                                ? hasViolation
-                                  ? "border-red-500 bg-red-500"
-                                  : "border-[#0ABAB5] bg-[#0ABAB5]"
-                                : "border-gray-300"
-                            }`}
-                            onClick={() => toggleAddon(addon.id)}
-                          >
-                            {selectedAddons.includes(addon.id) && <CheckCircle className="h-4 w-4 text-white" />}
-                          </div>
+                    className={cn(
+                      "h-1 w-24 mx-2 transition-colors",
+                      currentStep > step ? "bg-emerald-600" : "bg-gray-200",
+                    )}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-between mt-2 text-sm text-gray-600">
+            <span>Package & Date</span>
+            <span>Location</span>
+            <span>Contact Info</span>
+          </div>
+        </div>
+
+        {/* Step Content */}
+        <Card className="backdrop-blur-sm bg-white/80 border-0 shadow-xl">
+          <CardHeader>
+            <CardTitle className="text-2xl text-emerald-800">
+              {currentStep === 1 && "Choose Package & Date"}
+              {currentStep === 2 && "Event Location"}
+              {currentStep === 3 && "Contact Information"}
+              {currentStep === 4 && "Booking Confirmed!"}
+            </CardTitle>
+            <CardDescription>
+              {currentStep === 1 && "Select your package and preferred date & time"}
+              {currentStep === 2 && "Where will your event take place?"}
+              {currentStep === 3 && "We need your details to confirm the booking"}
+              {currentStep === 4 && "Your booking has been successfully submitted"}
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-6">
+            {/* Step 1: Package & Date Selection */}
+            {currentStep === 1 && (
+              <>
+                <div className="space-y-4">
+                  <Label className="text-base font-medium flex items-center gap-2">
+                    <Package className="w-4 h-4" />
+                    Select Package
+                  </Label>
+                  <div className="grid gap-4">
+                    {packages.map((pkg) => (
+                      <div
+                        key={pkg.id}
+                        className={cn(
+                          "p-4 rounded-lg border-2 cursor-pointer transition-all",
+                          formData.packageType === pkg.id
+                            ? "border-emerald-500 bg-emerald-50"
+                            : "border-gray-200 hover:border-emerald-300",
+                        )}
+                        onClick={() => setFormData((prev) => ({ ...prev, packageType: pkg.id }))}
+                      >
+                        <div className="flex justify-between items-start">
                           <div>
-                            <h4 className={`font-semibold ${hasViolation ? "text-red-600" : ""}`}>{addon.name}</h4>
-                            <p className={`text-sm ${hasViolation ? "text-red-500" : "text-gray-600"}`}>
-                              {addon.description}
-                            </p>
+                            <h3 className="font-semibold text-lg">{pkg.name}</h3>
+                            <p className="text-gray-600">{pkg.duration} hours</p>
+                            <ul className="text-sm text-gray-600 mt-2">
+                              {pkg.features.map((feature, index) => (
+                                <li key={index}>• {feature}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-2xl font-bold text-emerald-600">${pkg.price}</div>
                           </div>
                         </div>
                       </div>
+                    ))}
+                  </div>
+                </div>
 
-                      <div className="flex items-center gap-4">
-                        {addon.is_hourly && selectedAddons.includes(addon.id) && (
-                          <div className="flex flex-col items-end gap-2">
-                            <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-1">
-                              <button
-                                onClick={() => updateAddonQuantity(addon.id, -1)}
-                                className="w-8 h-8 rounded-md bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 font-bold"
-                                disabled={currentQuantity <= 1}
-                              >
-                                -
-                              </button>
-                              <span className={`w-8 text-center font-semibold ${hasViolation ? "text-red-600" : ""}`}>
-                                {currentQuantity}
-                              </span>
-                              <button
-                                onClick={() => updateAddonQuantity(addon.id, 1)}
-                                className="w-8 h-8 rounded-md bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 font-bold"
-                                disabled={addon.id !== 9 && currentQuantity >= maxAllowed}
-                              >
-                                +
-                              </button>
-                            </div>
-
-                            {addon.id === 1 && (
-                              <div className={`text-xs ${hasViolation ? "text-red-500 font-medium" : "text-gray-500"}`}>
-                                {hasViolation ? (
-                                  <>
-                                    ⚠️ Exceeds limit: {currentQuantity}/{maxAllowed} hrs
-                                    <br />
-                                    <span className="font-semibold">
-                                      Reduce to {maxAllowed} hours or add more event time
-                                    </span>
-                                  </>
-                                ) : (
-                                  `Max: ${maxAllowed} hrs (total event time)`
-                                )}
-                              </div>
-                            )}
-                            {addon.id === 6 && (
-                              <div className={`text-xs ${hasViolation ? "text-red-500 font-medium" : "text-gray-500"}`}>
-                                {hasViolation ? (
-                                  <>
-                                    ⚠️ Exceeds limit: {currentQuantity}/{maxAllowed} hrs
-                                    <br />
-                                    <span className="font-semibold">Reduce to {maxAllowed} hours maximum</span>
-                                  </>
-                                ) : (
-                                  `Max: ${maxAllowed} hrs`
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="text-right">
-                          <span
-                            className={`font-bold text-lg ${hasViolation ? "text-red-600" : ""}`}
-                            style={{ color: hasViolation ? "#dc2626" : "#0ABAB5" }}
-                          >
-                            ${addon.price}
-                            {addon.is_hourly && "/hr"}
-                          </span>
-                          {addon.is_hourly && selectedAddons.includes(addon.id) && (
-                            <div className={`text-sm ${hasViolation ? "text-red-600" : "text-gray-600"}`}>
-                              Total: ${addon.price * currentQuantity}
-                              {hasViolation && (
-                                <div className="text-xs text-red-500 font-medium">(Cannot be honored)</div>
-                              )}
-                            </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <CalendarIcon className="w-4 h-4" />
+                      Event Date
+                    </Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !formData.eventDate && "text-muted-foreground",
                           )}
-                        </div>
-                      </div>
-                    </div>
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {formData.eventDate ? format(formData.eventDate, "PPP") : "Pick a date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={formData.eventDate}
+                          onSelect={handleDateSelect}
+                          disabled={(date) => date < new Date()}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
-                )
-              })}
-            </div>
 
-            {(() => {
-              const additionalHours = getAdditionalHours(addonQuantities)
-              const totalHours = getTotalHours(selectedPackage?.id || 0, additionalHours)
-              const violations = validateAddonHours(addonQuantities, totalHours)
-
-              if (violations.length > 0) {
-                return (
-                  <div className="mb-8 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
-                    <div className="flex items-start gap-3">
-                      <div className="w-6 h-6 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-white text-sm font-bold">!</span>
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-red-800 mb-2">Configuration Error</h4>
-                        <p className="text-red-700 text-sm mb-3">
-                          Some add-ons exceed your total event time. Please adjust the hours or add more event time to
-                          continue.
-                        </p>
-                        <div className="space-y-1">
-                          {violations.map((addonId) => {
-                            const addon = addOns.find((a) => a.id === addonId)
-                            const currentQty = addonQuantities[addonId] || 1
-                            const maxAllowed = getMaxAllowedHours(addonId, totalHours)
-
-                            return addon ? (
-                              <div key={addonId} className="text-sm text-red-600">
-                                • <strong>{addon.name}</strong>: {currentQty} hrs selected, max {maxAllowed} hrs allowed
-                              </div>
-                            ) : null
-                          })}
-                        </div>
-                      </div>
-                    </div>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      Event Time
+                    </Label>
+                    <Select
+                      value={formData.eventTime}
+                      onValueChange={(value) => setFormData((prev) => ({ ...prev, eventTime: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableSlots.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                )
-              }
-              return null
-            })()}
-
-            <div className="glass-panel-mint p-6 rounded-2xl mb-8">
-              <div className="flex justify-between items-center mb-4">
-                <span className="font-semibold">Package: {selectedPackage?.name}</span>
-                <span className="font-bold">${selectedPackage?.price}</span>
-              </div>
-              {selectedAddons.map((addonId) => {
-                const addon = addOns.find((a) => a.id === addonId)
-                if (!addon) return null
-
-                const quantity = addonQuantities[addonId] || 1
-                const totalPrice = addon.price * quantity
-
-                return (
-                  <div key={addon.id} className="flex justify-between items-center mb-2">
-                    <span className="text-sm">
-                      {addon.name}
-                      {addon.is_hourly && quantity > 1 && ` (${quantity} ${quantity === 1 ? "hr" : "hrs"})`}
-                    </span>
-                    <span className="text-sm font-medium">
-                      {addon.is_hourly && quantity > 1 ? (
-                        <span>
-                          ${addon.price} × {quantity} = ${totalPrice}
-                        </span>
-                      ) : (
-                        `$${totalPrice}`
-                      )}
-                    </span>
-                  </div>
-                )
-              })}
-              <div className="border-t border-white/20 pt-4 mt-4">
-                <div className="flex justify-between text-lg font-bold">
-                  <span>Total:</span>
-                  <span>${calculateTotal()}</span>
                 </div>
-              </div>
-            </div>
-            <div className="flex justify-center gap-4">
-              <Button onClick={() => setCurrentStep(1)} variant="outline" size="lg" className="rounded-xl h-12 px-8">
-                Back
-              </Button>
-              <Button
-                onClick={() => setCurrentStep(3)}
-                disabled={hasValidationErrors(addonQuantities, selectedPackage?.id || 0)}
-                size="lg"
-                className={`rounded-xl h-12 px-8 ${
-                  hasValidationErrors(addonQuantities, selectedPackage?.id || 0)
-                    ? "bg-gray-400 hover:bg-gray-400 cursor-not-allowed"
-                    : "btn-mint"
-                }`}
-              >
-                {hasValidationErrors(addonQuantities, selectedPackage?.id || 0)
-                  ? "Fix Errors to Continue"
-                  : "Continue to Date & Time"}
-              </Button>
-            </div>
-          </div>
-        )}
+              </>
+            )}
 
-        {currentStep === 3 && (
-          <div>
-            <h3 className="text-2xl font-bold text-center mb-8">Select Date & Time</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div>
-                <Label htmlFor="event-date" className="text-base font-semibold">
-                  Event Date *
-                </Label>
-                <Input
-                  id="event-date"
-                  type="date"
-                  value={bookingData.eventDate}
-                  onChange={(e) => setBookingData((prev) => ({ ...prev, eventDate: e.target.value }))}
-                  className="mt-2 bg-white h-12"
-                  min={new Date().toISOString().split("T")[0]}
-                  required
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="event-time" className="text-base font-semibold">
-                  Start Time *
-                </Label>
-                <select
-                  id="event-time"
-                  value={bookingData.eventTime}
-                  onChange={(e) => setBookingData((prev) => ({ ...prev, eventTime: e.target.value }))}
-                  className="mt-2 w-full p-3 border border-gray-300 rounded-lg bg-white h-12"
-                  required
-                >
-                  <option value="">Select time</option>
-                  {generateTimeSlots().map((time) => (
-                    <option key={time} value={time}>
-                      {time}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="mt-8 p-4 bg-blue-50 rounded-xl">
-              <div className="flex items-start gap-3">
-                <Clock className="h-5 w-5 text-blue-600 mt-0.5" />
-                <div className="flex-1">
-                  {(() => {
-                    const additionalHours = getAdditionalHours(addonQuantities)
-                    const totalHours = getTotalHours(selectedPackage?.id || 0, additionalHours)
-                    const baseHours = selectedPackage?.duration_hours || 0
-
-                    return (
-                      <>
-                        <p className="font-semibold text-blue-900">
-                          Event Duration: {totalHours} hours
-                          {additionalHours > 0 && (
-                            <span className="text-sm font-normal">
-                              {" "}
-                              ({baseHours} base + {additionalHours} additional)
-                            </span>
-                          )}
-                        </p>
-                        {bookingData.eventTime && (
-                          <p className="text-sm text-blue-700">
-                            Booth available: {formatTimeTo12Hour(convertTo24Hour(bookingData.eventTime))} - {(() => {
-                              const startTime24 = convertTo24Hour(bookingData.eventTime)
-                              const endTime = new Date(
-                                new Date(`2000-01-01T${startTime24}`).getTime() + totalHours * 60 * 60 * 1000,
-                              ).toLocaleTimeString("en-US", {
-                                hour: "numeric",
-                                minute: "2-digit",
-                                hour12: true,
-                              })
-                              return endTime
-                            })()}
-                          </p>
-                        )}
-
-                        {selectedAddons.some((id) => {
-                          const addon = addOns.find((a) => a.id === id)
-                          return addon?.is_hourly && id !== 9
-                        }) && (
-                          <div className="mt-3 p-3 bg-white/50 rounded-lg">
-                            <p className="text-sm font-medium text-blue-800 mb-2">Hourly Add-ons Schedule:</p>
-                            {selectedAddons.map((addonId) => {
-                              const addon = addOns.find((a) => a.id === addonId)
-                              if (!addon?.is_hourly || addonId === 9) return null
-
-                              const hours = addonQuantities[addonId] || 1
-                              return (
-                                <div key={addonId} className="text-xs text-blue-700 flex justify-between">
-                                  <span>{addon.name}:</span>
-                                  <span>
-                                    {hours} {hours === 1 ? "hour" : "hours"}
-                                  </span>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </>
-                    )
-                  })()}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-center gap-4 mt-8">
-              <Button onClick={() => setCurrentStep(2)} variant="outline" size="lg" className="rounded-xl h-12 px-8">
-                Back
-              </Button>
-              <Button
-                onClick={() => setCurrentStep(4)}
-                disabled={!bookingData.eventDate || !bookingData.eventTime}
-                size="lg"
-                className="btn-mint rounded-xl h-12 px-8"
-              >
-                Continue to Details
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {currentStep === 4 && (
-          <div>
-            <h3 className="text-2xl font-bold text-center mb-8">Your Information</h3>
-
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="customer-name" className="text-base font-semibold">
-                    Full Name *
-                  </Label>
-                  <Input
-                    id="customer-name"
-                    value={bookingData.customerName}
-                    onChange={(e) => setBookingData((prev) => ({ ...prev, customerName: e.target.value }))}
-                    placeholder="Your full name"
-                    className="mt-2 bg-white h-12"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="customer-email" className="text-base font-semibold">
-                    Email Address *
-                  </Label>
-                  <Input
-                    id="customer-email"
-                    type="email"
-                    value={bookingData.customerEmail}
-                    onChange={(e) => setBookingData((prev) => ({ ...prev, customerEmail: e.target.value }))}
-                    placeholder="your@email.com"
-                    className="mt-2 bg-white h-12"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="customer-phone" className="text-base font-semibold">
-                    Phone Number
-                  </Label>
-                  <Input
-                    id="customer-phone"
-                    type="tel"
-                    value={bookingData.customerPhone}
-                    onChange={(e) => setBookingData((prev) => ({ ...prev, customerPhone: e.target.value }))}
-                    placeholder="(123) 456-7890"
-                    className="mt-2 bg-white h-12"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="event-type" className="text-base font-semibold">
-                    Event Type
-                  </Label>
-                  <select
-                    id="event-type"
-                    value={bookingData.eventType}
-                    onChange={(e) => setBookingData((prev) => ({ ...prev, eventType: e.target.value }))}
-                    className="mt-2 w-full p-3 border border-gray-300 rounded-lg bg-white h-12"
-                  >
-                    <option value="">Select event type</option>
-                    <option value="wedding">Wedding</option>
-                    <option value="corporate">Corporate Event</option>
-                    <option value="birthday">Birthday Party</option>
-                    <option value="quinceañera">Quinceañera</option>
-                    <option value="graduation">Graduation</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="guest-count" className="text-base font-semibold">
-                    Expected Guest Count
-                  </Label>
-                  <Input
-                    id="guest-count"
-                    type="number"
-                    value={bookingData.guestCount}
-                    onChange={(e) => setBookingData((prev) => ({ ...prev, guestCount: e.target.value }))}
-                    placeholder="50"
-                    className="mt-2 bg-white h-12"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="venue-address" className="text-base font-semibold">
-                    Venue Address
-                  </Label>
-                  <Input
-                    id="venue-address"
-                    value={bookingData.venueAddress}
-                    onChange={(e) => setBookingData((prev) => ({ ...prev, venueAddress: e.target.value }))}
-                    placeholder="123 Event St, Houston, TX"
-                    className="mt-2 bg-white h-12"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="special-requests" className="text-base font-semibold">
-                  Special Requests
+            {/* Step 2: Location */}
+            {currentStep === 2 && (
+              <div className="space-y-4">
+                <Label className="text-base font-medium flex items-center gap-2">
+                  <MapPin className="w-4 h-4" />
+                  Event Location
                 </Label>
                 <Textarea
-                  id="special-requests"
-                  value={bookingData.specialRequests}
-                  onChange={(e) => setBookingData((prev) => ({ ...prev, specialRequests: e.target.value }))}
-                  placeholder="Any special requests, setup instructions, or questions..."
-                  className="mt-2 bg-white min-h-[100px]"
+                  placeholder="Enter the full address where the photobooth will be set up..."
+                  value={formData.location}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
+                  className="min-h-[100px]"
                 />
+                <div className="space-y-2">
+                  <Label>Special Requests (Optional)</Label>
+                  <Textarea
+                    placeholder="Any special requirements, themes, or requests for your event..."
+                    value={formData.specialRequests}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, specialRequests: e.target.value }))}
+                    className="min-h-[80px]"
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="mt-8 glass-panel-mint p-6 rounded-2xl">
-              <h4 className="font-bold text-lg mb-4">Booking Summary</h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span>Package:</span>
-                  <span className="font-medium">
-                    {selectedPackage?.name} - ${selectedPackage?.price}
-                  </span>
-                </div>
-
-                <div className="flex justify-between">
-                  <span>Total Duration:</span>
-                  <span className="font-medium">
-                    {getTotalHours(selectedPackage?.id || 0, getAdditionalHours(addonQuantities))} hours
-                  </span>
-                </div>
-
-                {selectedAddons.map((addonId) => {
-                  const addon = addOns.find((a) => a.id === addonId)
-                  if (!addon) return null
-
-                  const quantity = addonQuantities[addonId] || 1
-                  const totalPrice = addon.price * quantity
-
-                  return (
-                    <div key={addon.id} className="flex justify-between">
-                      <span>
-                        {addon.name}
-                        {addon.is_hourly && quantity > 1 && ` (${quantity} ${quantity === 1 ? "hr" : "hrs"})`}:
-                      </span>
-                      <span className="font-medium">
-                        {addon.is_hourly && quantity > 1 ? (
-                          <span>
-                            ${addon.price} × {quantity} = ${totalPrice}
-                          </span>
-                        ) : (
-                          `$${totalPrice}`
-                        )}
-                      </span>
-                    </div>
-                  )
-                })}
-
-                <div className="flex justify-between">
-                  <span>Date & Time:</span>
-                  <span className="font-medium">
-                    {bookingData.eventDate} at {formatTimeTo12Hour(convertTo24Hour(bookingData.eventTime))}
-                    {bookingData.eventTime && (
-                      <span className="block text-xs text-gray-600">
-                        Until {(() => {
-                          const startTime24 = convertTo24Hour(bookingData.eventTime)
-                          const endTime = new Date(
-                            new Date(`2000-01-01T${startTime24}`).getTime() +
-                              getTotalHours(selectedPackage?.id || 0, getAdditionalHours(addonQuantities)) *
-                                60 *
-                                60 *
-                                1000,
-                          ).toLocaleTimeString("en-US", {
-                            hour: "numeric",
-                            minute: "2-digit",
-                            hour12: true,
-                          })
-                          return endTime
-                        })()}
-                      </span>
-                    )}
-                  </span>
-                </div>
-
-                <div className="border-t border-white/20 pt-2 mt-4">
-                  <div className="flex justify-between text-lg font-bold">
-                    <span>Total:</span>
-                    <span>${calculateTotal()}</span>
+            {/* Step 3: Contact Information */}
+            {currentStep === 3 && (
+              <>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      Full Name
+                    </Label>
+                    <Input
+                      placeholder="Your full name"
+                      value={formData.name}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Phone className="w-4 h-4" />
+                      Phone Number
+                    </Label>
+                    <Input
+                      placeholder="Your phone number"
+                      value={formData.phone}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                    />
                   </div>
                 </div>
-              </div>
-            </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Mail className="w-4 h-4" />
+                    Email Address
+                  </Label>
+                  <Input
+                    type="email"
+                    placeholder="your.email@example.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                  />
+                </div>
 
-            <div className="flex justify-center gap-4 mt-8">
-              <Button onClick={() => setCurrentStep(3)} variant="outline" size="lg" className="rounded-xl h-12 px-8">
-                Back
+                {/* Booking Summary */}
+                <div className="bg-emerald-50 p-4 rounded-lg">
+                  <h3 className="font-semibold mb-2">Booking Summary</h3>
+                  <div className="space-y-1 text-sm">
+                    <p>
+                      <strong>Package:</strong> {selectedPackage?.name}
+                    </p>
+                    <p>
+                      <strong>Date:</strong> {formData.eventDate ? format(formData.eventDate, "PPP") : "Not selected"}
+                    </p>
+                    <p>
+                      <strong>Time:</strong> {formData.eventTime}
+                    </p>
+                    <p>
+                      <strong>Duration:</strong> {selectedPackage?.duration} hours
+                    </p>
+                    <p>
+                      <strong>Location:</strong> {formData.location}
+                    </p>
+                    <div className="pt-2 border-t border-emerald-200">
+                      <p className="text-lg font-bold text-emerald-600">Total: ${totalPrice}</p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Step 4: Success */}
+            {currentStep === 4 && (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-emerald-800 mb-2">Booking Confirmed!</h3>
+                <p className="text-gray-600 mb-6">
+                  Thank you for choosing The Mint Booth! We'll contact you within 24 hours to confirm all details.
+                </p>
+                <Button onClick={() => window.location.reload()} className="bg-emerald-600 hover:bg-emerald-700">
+                  Book Another Event
+                </Button>
+              </div>
+            )}
+          </CardContent>
+
+          {/* Navigation Buttons */}
+          {currentStep < 4 && (
+            <div className="flex justify-between p-6 pt-0">
+              <Button variant="outline" onClick={prevStep} disabled={currentStep === 1}>
+                Previous
               </Button>
               <Button
-                onClick={handleSubmit}
-                disabled={!bookingData.customerName || !bookingData.customerEmail}
-                size="lg"
-                className="btn-mint rounded-xl h-12 px-8"
+                onClick={nextStep}
+                disabled={!canProceed() || isSubmitting}
+                className="bg-emerald-600 hover:bg-emerald-700"
               >
-                Confirm Booking
+                {isSubmitting ? "Submitting..." : currentStep === 3 ? "Confirm Booking" : "Next"}
               </Button>
             </div>
-          </div>
-        )}
-
-        {currentStep === 5 && (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckCircle className="h-8 w-8 text-green-600" />
-            </div>
-            <h3 className="text-2xl font-bold mb-4">Booking Confirmed!</h3>
-            <p className="text-gray-600 mb-6">
-              Thank you for choosing The Mint Booth! We've sent a confirmation email to {bookingData.customerEmail}.
-            </p>
-            <div className="glass-panel p-6 rounded-2xl max-w-md mx-auto">
-              <h4 className="font-semibold mb-4">Next Steps:</h4>
-              <ul className="text-left space-y-2 text-sm">
-                <li>• Check your email for booking details</li>
-                <li>• We'll contact you 48 hours before your event</li>
-                <li>• Payment will be processed separately</li>
-                <li>• Questions? Call us at (123) 456-7890</li>
-              </ul>
-            </div>
-          </div>
-        )}
+          )}
+        </Card>
       </div>
     </div>
   )

@@ -1,105 +1,76 @@
 import { type NextRequest, NextResponse } from "next/server"
-import {
-  getPackages,
-  getAddOns,
-  createBooking,
-  checkAvailability,
-  generateBookingReference,
-  initializeDatabase,
-} from "@/lib/database"
-
-interface BookingRequest {
-  customerName: string
-  customerEmail: string
-  customerPhone: string
-  eventDate: string
-  eventTime: string
-  eventType: string
-  guestCount: string
-  venueAddress: string
-  packageId: number
-  selectedAddons: number[]
-  addonQuantities: Record<number, number>
-  specialRequests: string
-}
+import { sql } from "@/lib/database"
 
 export async function POST(request: NextRequest) {
   try {
-    // Initialize database on first request
-    await initializeDatabase()
+    const body = await request.json()
+    const { name, email, phone, eventDate, eventTime, duration, packageType, location, specialRequests, totalPrice } =
+      body
 
-    const bookingData: BookingRequest = await request.json()
-
-    // Check availability
-    const isAvailable = await checkAvailability(bookingData.eventDate, convertTo24Hour(bookingData.eventTime))
-    if (!isAvailable) {
+    // Validate required fields
+    if (
+      !name ||
+      !email ||
+      !phone ||
+      !eventDate ||
+      !eventTime ||
+      !duration ||
+      !packageType ||
+      !location ||
+      !totalPrice
+    ) {
       return NextResponse.json(
         {
           success: false,
-          message: "Selected date and time is not available",
-        },
-        { status: 409 },
-      )
-    }
-
-    // Fetch packages and addons
-    const packages = await getPackages()
-    const addons = await getAddOns()
-
-    // Calculate pricing
-    const selectedPackage = packages.find((p) => p.id === bookingData.packageId)
-    if (!selectedPackage) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Invalid package selected",
+          error: "Missing required fields",
         },
         { status: 400 },
       )
     }
 
-    const packagePrice = selectedPackage.price
-    const addonsTotal = bookingData.selectedAddons.reduce((total, addonId) => {
-      const addon = addons.find((a) => a.id === addonId)
-      if (!addon) return total
-      const quantity = bookingData.addonQuantities[addonId] || 1
-      return total + addon.price * quantity
-    }, 0)
+    // Check if the time slot is available
+    const existingBooking = await sql`
+      SELECT id FROM bookings 
+      WHERE event_date = ${eventDate} 
+      AND event_time = ${eventTime}
+      AND status != 'cancelled'
+    `
 
-    const totalAmount = packagePrice + addonsTotal
-    const bookingReference = generateBookingReference()
+    if (existingBooking.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Time slot is not available",
+        },
+        { status: 409 },
+      )
+    }
 
-    // Create booking
-    await createBooking({
-      booking_reference: bookingReference,
-      customer_name: bookingData.customerName,
-      customer_email: bookingData.customerEmail,
-      customer_phone: bookingData.customerPhone,
-      event_date: bookingData.eventDate,
-      event_time: convertTo24Hour(bookingData.eventTime),
-      event_type: bookingData.eventType,
-      guest_count: bookingData.guestCount ? Number.parseInt(bookingData.guestCount) : undefined,
-      venue_address: bookingData.venueAddress,
-      package_id: bookingData.packageId,
-      selected_addons: bookingData.addonQuantities,
-      subtotal: packagePrice,
-      total_amount: totalAmount,
-      status: "pending",
-      special_requests: bookingData.specialRequests,
-    })
+    // Create the booking
+    const result = await sql`
+      INSERT INTO bookings (
+        name, email, phone, event_date, event_time, duration, 
+        package_type, location, special_requests, total_price, status
+      ) VALUES (
+        ${name}, ${email}, ${phone}, ${eventDate}, ${eventTime}, ${duration},
+        ${packageType}, ${location}, ${specialRequests || null}, ${totalPrice}, 'pending'
+      ) RETURNING id, created_at
+    `
 
     return NextResponse.json({
       success: true,
-      bookingReference,
-      totalAmount,
       message: "Booking created successfully",
+      booking: {
+        id: result[0].id,
+        created_at: result[0].created_at,
+      },
     })
   } catch (error) {
-    console.error("Booking error:", error)
+    console.error("Booking creation failed:", error)
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to create booking",
+        error: error instanceof Error ? error.message : "Failed to create booking",
       },
       { status: 500 },
     )
@@ -108,34 +79,23 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    // Initialize database on first request
-    await initializeDatabase()
+    const bookings = await sql`
+      SELECT * FROM bookings 
+      ORDER BY event_date DESC, event_time DESC
+    `
 
-    const [packages, addons] = await Promise.all([getPackages(), getAddOns()])
-    return NextResponse.json({ packages, addons })
+    return NextResponse.json({
+      success: true,
+      bookings,
+    })
   } catch (error) {
-    console.error("Error fetching data:", error)
+    console.error("Failed to fetch bookings:", error)
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to fetch data",
+        error: error instanceof Error ? error.message : "Failed to fetch bookings",
       },
       { status: 500 },
     )
   }
-}
-
-function convertTo24Hour(time12: string): string {
-  if (!time12) return ""
-  const [time, ampm] = time12.split(" ")
-  const [hours, minutes] = time.split(":")
-  let hour24 = Number.parseInt(hours)
-
-  if (ampm === "PM" && hour24 !== 12) {
-    hour24 += 12
-  } else if (ampm === "AM" && hour24 === 12) {
-    hour24 = 0
-  }
-
-  return `${hour24.toString().padStart(2, "0")}:${minutes}`
 }
