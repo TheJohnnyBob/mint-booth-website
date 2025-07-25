@@ -9,6 +9,31 @@
   --mint-primary-dark: #089b96;
   --mint-primary-alpha: rgba(10, 186, 181, 0.1);
   --mint-primary-alpha-strong: rgba(10, 186, 181, 0.2);
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 222.2 47.4% 11.2%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 222.2 84% 4.9%;
+  --radius: 0.5rem;
+  --chart-1: 12 76% 61%;
+  --chart-2: 173 58% 39%;
+  --chart-3: 197 37% 24%;
+  --chart-4: 43 74% 66%;
+  --chart-5: 27 87% 67%;
 }
 
 /* Apple San Francisco Font Stack */
@@ -45,9 +70,8 @@
 /* Core Liquid Glass Effects with Mint Accents */
 @layer components {
   .glass-panel {
-    background: rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(12px) saturate(150%);
-    -webkit-backdrop-filter: blur(12px) saturate(150%);
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.3);
     box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.15), inset 0 0 30px rgba(255, 255, 255, 0.1), 0 8px 32px
       rgba(0, 0, 0, 0.1);
@@ -56,10 +80,9 @@
   }
 
   .glass-panel-mint {
-    background: var(--mint-primary-alpha);
-    backdrop-filter: blur(12px) saturate(150%);
-    -webkit-backdrop-filter: blur(12px) saturate(150%);
-    border: 1px solid var(--mint-primary-alpha-strong);
+    background: rgba(10, 186, 181, 0.1);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(10, 186, 181, 0.2);
     box-shadow: inset 0 0 10px rgba(10, 186, 181, 0.15), inset 0 0 30px rgba(10, 186, 181, 0.1), 0 8px 32px
       rgba(10, 186, 181, 0.1);
     border-radius: 12px;
@@ -77,11 +100,10 @@
   }
 
   .glass-card {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(8px) saturate(120%);
-    -webkit-backdrop-filter: blur(8px) saturate(120%);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.1), 0 4px 16px rgba(0, 0, 0, 0.05);
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
     border-radius: 16px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
@@ -93,11 +115,10 @@
   }
 
   .glass-card-mint {
-    background: var(--mint-primary-alpha);
-    backdrop-filter: blur(8px) saturate(120%);
-    -webkit-backdrop-filter: blur(8px) saturate(120%);
-    border: 1px solid var(--mint-primary-alpha-strong);
-    box-shadow: inset 0 0 8px rgba(10, 186, 181, 0.1), 0 4px 16px rgba(10, 186, 181, 0.05);
+    background: rgba(10, 186, 181, 0.15);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(10, 186, 181, 0.3);
+    box-shadow: 0 8px 32px 0 rgba(10, 186, 181, 0.2);
     border-radius: 16px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
@@ -111,35 +132,29 @@
   /* Specular highlights for glass edges */
   .glass-highlight {
     position: relative;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
   }
 
-  .glass-highlight::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-    border-radius: inherit;
-  }
-
-  .glass-highlight-mint::before {
-    background: linear-gradient(90deg, transparent, rgba(10, 186, 181, 0.4), transparent);
+  .glass-highlight-mint {
+    background: rgba(10, 186, 181, 0.1);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(10, 186, 181, 0.25);
   }
 
   /* Mint-themed buttons */
   .btn-mint {
-    background: var(--mint-primary);
+    background: linear-gradient(135deg, #0abab5 0%, #0a9b96 100%);
     color: white;
     border: none;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.3s ease;
   }
 
   .btn-mint:hover {
-    background: var(--mint-primary-dark);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(10, 186, 181, 0.3);
+    background: linear-gradient(135deg, #0a9b96 0%, #087b77 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(10, 186, 181, 0.3);
   }
 
   .btn-mint:active {
@@ -178,7 +193,7 @@
       transform: translateY(0px);
     }
     50% {
-      transform: translateY(-10px);
+      transform: translateY(-20px);
     }
   }
 
@@ -205,6 +220,21 @@
     }
     to {
       box-shadow: 0 0 40px rgba(10, 186, 181, 0.4);
+    }
+  }
+
+  .pulse-mint {
+    animation: pulseMint 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulseMint {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.8;
+      transform: scale(1.05);
     }
   }
 }
@@ -235,4 +265,58 @@
     border: 1px solid rgba(255, 255, 255, 0.2);
     box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.4), 0 8px 32px rgba(0, 0, 0, 0.3);
   }
+}
+
+/* Custom Mint Booth Styles */
+.liquid-bg {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-size: 400% 400%;
+  animation: liquidMove 15s ease infinite;
+}
+
+@keyframes liquidMove {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.mint-gradient {
+  background: linear-gradient(135deg, #0abab5 0%, #0a9b96 50%, #087b77 100%);
+}
+
+.mint-text {
+  color: #0abab5;
+}
+
+.floating-animation {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #0abab5;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0a9b96;
 }

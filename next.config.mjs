@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Remove static export for Vercel - use dynamic features
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -8,8 +7,7 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    // Vercel handles image optimization automatically
-    domains: ['imagedelivery.net'], // Allow Cloudflare Images
+    domains: ['imagedelivery.net'],
     formats: ['image/webp', 'image/avif'],
   },
 }
