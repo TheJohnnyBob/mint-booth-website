@@ -1,13 +1,14 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { getAllBookings } from "@/lib/database"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const bookings = await getAllBookings()
 
     return NextResponse.json({
-      bookings,
-      total: bookings.length,
+      success: true,
+      bookings: bookings,
+      count: bookings.length,
     })
   } catch (error) {
     console.error("Error fetching bookings:", error)
@@ -15,6 +16,7 @@ export async function GET(request: NextRequest) {
       {
         success: false,
         message: "Failed to fetch bookings",
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

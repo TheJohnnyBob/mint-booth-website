@@ -28,10 +28,18 @@ export async function POST(request: NextRequest) {
     // Initialize database on first request
     await initializeDatabase()
 
-    const bookingData: BookingRequest = await request.json()
+    const body = await request.json()
+
+    // Validate required fields
+    const requiredFields = ["customerName", "customerEmail", "eventDate", "eventTime", "packageId"]
+    for (const field of requiredFields) {
+      if (!body[field]) {
+        return NextResponse.json({ success: false, message: `Missing required field: ${field}` }, { status: 400 })
+      }
+    }
 
     // Check availability
-    const isAvailable = await checkAvailability(bookingData.eventDate, convertTo24Hour(bookingData.eventTime))
+    const isAvailable = await checkAvailability(body.eventDate, convertTo24Hour(body.eventTime))
     if (!isAvailable) {
       return NextResponse.json(
         {
@@ -42,64 +50,69 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Fetch packages and addons
+    // Generate booking reference
+    const bookingReference = generateBookingReference()
+
+    // Calculate totals
     const packages = await getPackages()
     const addons = await getAddOns()
 
-    // Calculate pricing
-    const selectedPackage = packages.find((p) => p.id === bookingData.packageId)
+    const selectedPackage = packages.find((p) => p.id === body.packageId)
     if (!selectedPackage) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Invalid package selected",
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({ success: false, message: "Invalid package selected" }, { status: 400 })
     }
 
-    const packagePrice = selectedPackage.price
-    const addonsTotal = bookingData.selectedAddons.reduce((total, addonId) => {
-      const addon = addons.find((a) => a.id === addonId)
-      if (!addon) return total
-      const quantity = bookingData.addonQuantities[addonId] || 1
-      return total + addon.price * quantity
-    }, 0)
+    let subtotal = selectedPackage.price
+    const selectedAddons = body.selectedAddons || {}
 
-    const totalAmount = packagePrice + addonsTotal
-    const bookingReference = generateBookingReference()
+    // Calculate addon costs
+    for (const [addonId, quantity] of Object.entries(selectedAddons)) {
+      const addon = addons.find((a) => a.id === Number.parseInt(addonId))
+      if (addon && quantity > 0) {
+        const addonCost = addon.is_hourly
+          ? addon.price * quantity * selectedPackage.duration_hours
+          : addon.price * quantity
+        subtotal += addonCost
+      }
+    }
 
-    // Create booking
-    await createBooking({
+    const totalAmount = subtotal // Add tax calculation here if needed
+
+    // Create booking data
+    const bookingData = {
       booking_reference: bookingReference,
-      customer_name: bookingData.customerName,
-      customer_email: bookingData.customerEmail,
-      customer_phone: bookingData.customerPhone,
-      event_date: bookingData.eventDate,
-      event_time: convertTo24Hour(bookingData.eventTime),
-      event_type: bookingData.eventType,
-      guest_count: bookingData.guestCount ? Number.parseInt(bookingData.guestCount) : undefined,
-      venue_address: bookingData.venueAddress,
-      package_id: bookingData.packageId,
-      selected_addons: bookingData.addonQuantities,
-      subtotal: packagePrice,
+      customer_name: body.customerName,
+      customer_email: body.customerEmail,
+      customer_phone: body.customerPhone || null,
+      event_date: body.eventDate,
+      event_time: convertTo24Hour(body.eventTime),
+      event_type: body.eventType || null,
+      guest_count: body.guestCount || null,
+      venue_address: body.venueAddress || null,
+      package_id: body.packageId,
+      selected_addons: selectedAddons,
+      subtotal: subtotal,
       total_amount: totalAmount,
       status: "pending",
-      special_requests: bookingData.specialRequests,
-    })
+      special_requests: body.specialRequests || null,
+    }
+
+    // Save to database
+    const result = await createBooking(bookingData)
 
     return NextResponse.json({
       success: true,
-      bookingReference,
-      totalAmount,
       message: "Booking created successfully",
+      bookingReference: result,
+      totalAmount: totalAmount,
     })
   } catch (error) {
-    console.error("Booking error:", error)
+    console.error("Booking creation error:", error)
     return NextResponse.json(
       {
         success: false,
         message: "Failed to create booking",
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

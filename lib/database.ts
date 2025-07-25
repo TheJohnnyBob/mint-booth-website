@@ -1,5 +1,3 @@
-// Database utility functions for Cloudflare D1
-
 import { neon } from "@neondatabase/serverless"
 
 export interface Package {
@@ -44,9 +42,39 @@ export interface Booking {
 // Initialize Neon connection
 const sql = neon(process.env.DATABASE_URL!)
 
+// Validate database connection and check existing schema
+export async function validateConnection() {
+  try {
+    // Test connection by checking existing tables
+    const tables = await sql`
+      SELECT table_name, table_schema 
+      FROM information_schema.tables 
+      WHERE table_schema IN ('public', 'neon_auth')
+      ORDER BY table_schema, table_name
+    `
+
+    console.log("Database connection successful!")
+    console.log("Existing tables:", tables)
+
+    return {
+      success: true,
+      tables: tables.map((t) => `${t.table_schema}.${t.table_name}`),
+    }
+  } catch (error) {
+    console.error("Database connection failed:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+  }
+}
+
 // Initialize database tables (run once)
 export async function initializeDatabase() {
   try {
+    // First validate connection
+    const connectionTest = await validateConnection()
+    if (!connectionTest.success) {
+      throw new Error(`Database connection failed: ${connectionTest.error}`)
+    }
+
     // Create packages table
     await sql`
       CREATE TABLE IF NOT EXISTS packages (

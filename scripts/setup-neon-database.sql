@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   FOREIGN KEY (package_id) REFERENCES packages (id)
 );
 
--- Insert packages
+-- Insert sample packages
 INSERT INTO packages (id, name, price, duration_hours, description, features) VALUES
 (1, 'Mint Pro', 299.00, 2, 'Our entry-level package for small events or budgets.', 
  '["2 Hours of Booth Rental", "Unlimited Digital Captures", "Fun Filters & Digital Stickers", "Standard Template Overlay", "LED Ring Light", "Standard Backdrop"]'),
@@ -53,7 +53,7 @@ INSERT INTO packages (id, name, price, duration_hours, description, features) VA
  '["4 Hours of Booth Rental", "All Max features, plus:", "HD Video Messages", "AI Green Screen Backgrounds", "Unlimited On-Site Prints", "Premium Backdrop Included", "Live Slideshow Feed"]')
 ON CONFLICT (id) DO NOTHING;
 
--- Insert add-ons
+-- Insert sample add-ons
 INSERT INTO addons (id, name, price, description, category, is_hourly, available_packages) VALUES
 (1, 'Booth Attendant', 49.00, 'Professional attendant per hour', 'service', TRUE, '[1,2,3]'),
 (2, 'Guest Scrapbook Service', 119.00, 'Physical scrapbook creation', 'service', FALSE, '[1,2,3]'),
