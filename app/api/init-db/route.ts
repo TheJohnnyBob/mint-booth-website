@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server"
-import { initializeDatabase } from "@/lib/database"
+import { initializeDatabase } from "@/lib/server/database"
 
 export async function POST() {
   try {
     const result = await initializeDatabase()
-
     return NextResponse.json({
       success: result.success,
       message:

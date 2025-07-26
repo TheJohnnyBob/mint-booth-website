@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server"
-import { validateConnection } from "@/lib/database"
+import { validateConnection } from "@/lib/server/database"
+
+export const dynamic = "force-dynamic"
 
 export async function GET() {
   try {
     const result = await validateConnection()
-
     return NextResponse.json({
       success: result.success,
       message: result.success ? "Database connection successful" : "Database connection failed",
