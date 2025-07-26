@@ -1,29 +1,22 @@
 import { NextResponse } from "next/server"
-import { testConnection } from "@/lib/database"
+import { validateConnection } from "@/lib/database"
 
 export async function GET() {
   try {
-    const result = await testConnection()
+    const result = await validateConnection()
 
-    if (result.success) {
-      return NextResponse.json({
-        success: true,
-        message: "Database connection successful",
-        data: result.result,
-      })
-    } else {
-      return NextResponse.json(
-        {
-          success: false,
-          error: result.error,
-        },
-        { status: 500 },
-      )
-    }
+    return NextResponse.json({
+      success: result.success,
+      message: result.success ? "Database connection successful" : "Database connection failed",
+      tables: result.tables || [],
+      error: result.error || null,
+    })
   } catch (error) {
+    console.error("Database validation error:", error)
     return NextResponse.json(
       {
         success: false,
+        message: "Database validation failed",
         error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },

@@ -1,27 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@/lib/database"
+import { getAllBookings, sql } from "@/lib/database"
 
 export async function GET() {
   try {
-    const bookings = await sql`
-      SELECT 
-        id, name, email, phone, event_date, event_time, 
-        duration, package_type, location, special_requests, 
-        total_price, status, created_at, updated_at
-      FROM bookings 
-      ORDER BY event_date DESC, event_time DESC
-    `
+    const bookings = await getAllBookings()
 
     return NextResponse.json({
       success: true,
       bookings,
     })
   } catch (error) {
-    console.error("Failed to fetch admin bookings:", error)
+    console.error("Error fetching admin bookings:", error)
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to fetch bookings",
+        message: "Failed to fetch bookings",
       },
       { status: 500 },
     )

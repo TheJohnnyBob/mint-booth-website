@@ -1,60 +1,46 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@/lib/database"
+import { checkAvailability } from "@/lib/database"
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const date = searchParams.get("date")
+    const time = searchParams.get("time")
 
-    if (!date) {
+    if (!date || !time) {
       return NextResponse.json(
         {
           success: false,
-          error: "Date parameter is required",
+          message: "Date and time are required",
         },
         { status: 400 },
       )
     }
 
-    // Get existing bookings for the date
-    const existingBookings = await sql`
-      SELECT event_time FROM bookings 
-      WHERE event_date = ${date} 
-      AND status != 'cancelled'
-    `
+    // Convert 12-hour time to 24-hour format
+    const convertTo24Hour = (time12: string): string => {
+      if (!time12) return ""
+      const [time, ampm] = time12.split(" ")
+      const [hours, minutes] = time.split(":")
+      let hour24 = Number.parseInt(hours)
+      if (ampm === "PM" && hour24 !== 12) hour24 += 12
+      if (ampm === "AM" && hour24 === 12) hour24 = 0
+      return `${hour24.toString().padStart(2, "0")}:${minutes}:00`
+    }
 
-    // Define available time slots (9 AM to 9 PM)
-    const allTimeSlots = [
-      "09:00",
-      "10:00",
-      "11:00",
-      "12:00",
-      "13:00",
-      "14:00",
-      "15:00",
-      "16:00",
-      "17:00",
-      "18:00",
-      "19:00",
-      "20:00",
-      "21:00",
-    ]
-
-    // Filter out booked slots
-    const bookedTimes = existingBookings.map((booking) => booking.event_time)
-    const availableSlots = allTimeSlots.filter((slot) => !bookedTimes.includes(slot))
+    const time24 = convertTo24Hour(time)
+    const isAvailable = await checkAvailability(date, time24)
 
     return NextResponse.json({
       success: true,
-      availableSlots,
-      bookedSlots: bookedTimes,
+      available: isAvailable,
     })
   } catch (error) {
-    console.error("Failed to fetch availability:", error)
+    console.error("Error checking availability:", error)
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to fetch availability",
+        message: "Failed to check availability",
       },
       { status: 500 },
     )
